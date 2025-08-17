@@ -1,15 +1,23 @@
-import { defineConfig } from 'vite';
-import react from '@vitejs/plugin-react';
-import mkcert from 'vite-plugin-mkcert';
+import { defineConfig } from 'vite'
+import react from '@vitejs/plugin-react'
 
-// https://vite.dev/config/
-export default defineConfig({
-  plugins: [
-    react(),
-    mkcert() // enables local HTTPS automatically
-  ],
-  server: {
-    port: 5173, // your dev server port
-    https: true // use HTTPS
+// Only use mkcert + server config in local dev
+export default defineConfig(({ command }) => {
+  if (command === "serve") {
+    return {
+      plugins: [react()],
+      server: {
+        port: 5173,
+        https: true
+      }
+    }
+  } else {
+    // production build for Vercel
+    return {
+      plugins: [react()],
+      build: {
+        outDir: "dist"
+      }
+    }
   }
-});
+})

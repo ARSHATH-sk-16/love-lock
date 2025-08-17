@@ -5,7 +5,7 @@ import { encryptMessage, decryptMessage, getSharedKey } from "./lib/crypto";
 // Avatar Component
 function Avatar({ email }) {
   const initials = email.split("@")[0].slice(0, 2).toUpperCase();
-  const color = email.charCodeAt(0) % 360; // generate color
+  const color = email.charCodeAt(0) % 360;
   return (
     <div
       className="w-8 h-8 rounded-full flex items-center justify-center text-white font-bold"
@@ -24,7 +24,7 @@ export default function App() {
   const [newMsg, setNewMsg] = useState("");
   const [email, setEmail] = useState("");
   const [loading, setLoading] = useState(false);
-  const [typing, setTyping] = useState(false); // Typing indicator
+  const [typing, setTyping] = useState(false);
 
   // --------------------------
   // Auth & session handling
@@ -53,22 +53,24 @@ export default function App() {
       .eq("id", userId)
       .single();
 
-    if (!error && data) {
-      setProfile(data);
+    if (error) {
+      console.error("❌ Fetch profile error:", error.message);
+      return;
+    }
 
-      if (data.partner_id) {
-        const { data: partnerData } = await supabase
-          .from("profiles")
-          .select("email")
-          .eq("id", data.partner_id)
-          .single();
+    setProfile(data);
 
-        setPartnerEmail(partnerData?.email || null);
+    if (data.partner_id) {
+      const { data: partnerData } = await supabase
+        .from("profiles")
+        .select("email")
+        .eq("id", data.partner_id)
+        .single();
+      setPartnerEmail(partnerData?.email || null);
 
-        fetchMessages(data.id, data.partner_id);
-        subscribeMessages(data.id, data.partner_id);
-        subscribeTyping(data.id, data.partner_id);
-      }
+      fetchMessages(data.id, data.partner_id);
+      subscribeMessages(data.id, data.partner_id);
+      subscribeTyping(data.id, data.partner_id);
     }
   }
 
@@ -85,14 +87,8 @@ export default function App() {
       .eq("invite_code", code)
       .single();
 
-    if (findError || !partner) {
-      alert("❌ Invalid invite code");
-      return;
-    }
-    if (partner.partner_id) {
-      alert("❌ This user is already paired");
-      return;
-    }
+    if (findError || !partner) return alert("❌ Invalid invite code");
+    if (partner.partner_id) return alert("❌ This user is already paired");
 
     await Promise.all([
       supabase.from("profiles").update({ partner_id: partner.id }).eq("id", profile.id),
@@ -122,8 +118,7 @@ export default function App() {
         try {
           const content = await decryptMessage(key, m.content);
           return { ...m, content };
-        } catch (err) {
-          console.error("Decryption failed:", m, err);
+        } catch {
           return { ...m, content: "❌ Failed to decrypt" };
         }
       })
@@ -147,7 +142,6 @@ export default function App() {
         { event: "INSERT", schema: "public", table: "messages" },
         async (payload) => {
           const msg = payload.new;
-
           if (
             (msg.sender_id === userId && msg.receiver_id === partnerId) ||
             (msg.sender_id === partnerId && msg.receiver_id === userId)
@@ -156,8 +150,7 @@ export default function App() {
             try {
               const decrypted = await decryptMessage(key, msg.content);
               setMessages((prev) => [...prev, { ...msg, content: decrypted }]);
-            } catch (err) {
-              console.error("Realtime decryption failed:", msg, err);
+            } catch {
               setMessages((prev) => [...prev, { ...msg, content: "❌ Failed to decrypt" }]);
             }
           }
@@ -170,9 +163,7 @@ export default function App() {
   // Typing indicator
   // --------------------------
   function handleTyping() {
-    supabase
-      .from("typing_status")
-      .upsert({ user_id: profile.id, is_typing: true });
+    supabase.from("typing_status").upsert({ user_id: profile.id, is_typing: true });
     setTimeout(() => {
       supabase.from("typing_status").upsert({ user_id: profile.id, is_typing: false });
     }, 2000);
@@ -181,9 +172,7 @@ export default function App() {
   function subscribeTyping(userId, partnerId) {
     supabase
       .from(`typing_status:user_id=eq.${partnerId}`)
-      .on("UPDATE", (payload) => {
-        setTyping(payload.new.is_typing);
-      })
+      .on("UPDATE", (payload) => setTyping(payload.new.is_typing))
       .subscribe();
   }
 
@@ -212,20 +201,30 @@ export default function App() {
   // --------------------------
   // Auth functions
   // --------------------------
-  async function signOut() {
-    await supabase.auth.signOut();
+  async function signInWithEmail() {
+    if (!email) return alert("Enter an email first!");
+    setLoading(true);
+
+    try {
+      const { error } = await supabase.auth.signInWithOtp({
+        email,
+        options: { emailRedirectTo: window.location.href },
+      });
+      if (error) throw error;
+      alert("✅ Check your email for the magic link!");
+    } catch (err) {
+      console.error("Magic link error:", err.message);
+      alert("❌ " + err.message);
+    } finally {
+      setLoading(false);
+    }
   }
 
-  async function signInWithEmail() {
-    if (!email) {
-      alert("Enter an email first!");
-      return;
-    }
-    setLoading(true);
-    const { error } = await supabase.auth.signInWithOtp({ email });
-    setLoading(false);
-    if (error) alert(error.message);
-    else alert("Check your email for the magic link!");
+  async function signOut() {
+    await supabase.auth.signOut();
+    setProfile(null);
+    setPartnerEmail(null);
+    setMessages([]);
   }
 
   // --------------------------
