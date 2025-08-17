@@ -199,23 +199,17 @@ export default function App() {
   }
 
   // --------------------------
-  // Auth functions (updated magic link)
+  // Auth functions
   // --------------------------
   async function signInWithEmail() {
     if (!email) return alert("Enter an email first!");
     setLoading(true);
 
     try {
-      const redirectUrl =
-        window.location.hostname === "localhost"
-          ? "http://localhost:5173"
-          : "https://love-lock-xi.vercel.app";
-
       const { error } = await supabase.auth.signInWithOtp({
         email,
-        options: { emailRedirectTo: redirectUrl },
+        options: { emailRedirectTo: window.location.href },
       });
-
       if (error) throw error;
       alert("✅ Check your email for the magic link!");
     } catch (err) {
