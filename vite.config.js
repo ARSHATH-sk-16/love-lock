@@ -3,11 +3,14 @@ import react from "@vitejs/plugin-react";
 import mkcert from "vite-plugin-mkcert";
 
 export default defineConfig(({ command }) => ({
-  plugins: [react(), mkcert()],
+  plugins: [
+    react(),
+    command === "serve" ? mkcert() : undefined // only use mkcert locally
+  ],
   server: command === "serve" ? {
     port: 5173,
     https: true
-  } : undefined, // undefined for build/production
+  } : undefined,
   build: {
     outDir: "dist"
   }
